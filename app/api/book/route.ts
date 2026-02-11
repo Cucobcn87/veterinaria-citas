@@ -6,16 +6,21 @@ const SERVICE_DURATIONS = {
     consulta: 30,
     vacuna: 30,
     unas: 15,
-    cirugia: 120
+    cirugia: 120,
+    domicilio: 30
 };
 
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { ownerName, petName, mobile, notes, date, time, service, reason, vaccineType } = body;
+        const { ownerName, petName, mobile, notes, date, time, service, reason, vaccineType, address } = body;
 
         if (!ownerName || !petName || !mobile || !date || !time || !service) {
             return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+        }
+
+        if (service === 'domicilio' && !address) {
+            return NextResponse.json({ error: 'Address is required for home visits' }, { status: 400 });
         }
 
         // @ts-ignore
@@ -29,12 +34,15 @@ export async function POST(request: NextRequest) {
 
         let description = `Tipo: ${service}`;
         if (service === 'consulta' && reason) description += `\nMotivo: ${reason}`;
+        if (service === 'domicilio' && reason) description += `\nMotivo: ${reason}`;
+        if (service === 'domicilio' && address) description += `\nDirección: ${address}`;
         if (service === 'vacuna' && vaccineType) description += `\nVacuna: ${vaccineType}`;
         if (notes) description += `\nNotas: ${notes}`;
 
         const event = {
             summary: summary,
             description: description,
+            location: address || '',
             start: {
                 dateTime: format(startDateTime, "yyyy-MM-dd'T'HH:mm:ss"), // Send local time
                 timeZone: 'Europe/Madrid',

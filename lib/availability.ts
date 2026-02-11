@@ -5,7 +5,8 @@ const SERVICES = {
     consulta: { duration: 30 },
     vacuna: { duration: 30 },
     unas: { duration: 15 },
-    cirugia: { duration: 120 }
+    cirugia: { duration: 120 },
+    domicilio: { duration: 30 }
 };
 
 export async function getSlotsForDate(date: Date, serviceType: string): Promise<string[]> {
@@ -28,6 +29,13 @@ export async function getSlotsForDate(date: Date, serviceType: string): Promise<
             ranges.push({ start: { h: 10, m: 0 }, end: { h: 12, m: 0 } });
         }
     }
+    // SPECIAL RULE: Home Visit only Mon-Fri at 14:15
+    else if (serviceType === 'domicilio') {
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+            ranges.push({ start: { h: 14, m: 15 }, end: { h: 14, m: 45 } });
+        }
+    }
+    // General Consultations / Vaccines
     else {
         if (dayOfWeek >= 1 && dayOfWeek <= 5) {
             ranges.push({ start: { h: 10, m: 0 }, end: { h: 14, m: 0 } });

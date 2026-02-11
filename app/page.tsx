@@ -8,12 +8,13 @@ import {
   isSameMonth, isSameDay, isBefore
 } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Calendar as CalendarIcon, Clock, CheckCircle, Dog, Stethoscope, Scissors, ChevronLeft, ChevronRight, Syringe, Cat } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, CheckCircle, Dog, Stethoscope, Scissors, ChevronLeft, ChevronRight, Syringe, Cat, Car } from 'lucide-react';
 
 const SERVICES = [
   { id: 'consulta', name: 'Consulta General', duration: '30 min', icon: Stethoscope },
   { id: 'vacuna', name: 'Vacuna', duration: '30 min', icon: Syringe },
   { id: 'unas', name: 'Corte de Uñas', duration: '15 min', icon: Scissors },
+  { id: 'domicilio', name: 'A Domicilio', duration: '30 min', icon: Car },
   { id: 'cirugia', name: 'Cirugía', duration: '2h', icon: Dog },
 ];
 
@@ -41,7 +42,8 @@ export default function Home() {
     ownerName: '',
     petName: '',
     mobile: '',
-    reason: '' // New mandatory field for consulta
+    reason: '', // New mandatory field for consulta
+    address: ''
   });
 
   // Calculate days to display (grid)
@@ -368,11 +370,28 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Conditional Reason Field */}
-              {selectedService === 'consulta' && (
+              {/* Conditional Address Field */}
+              {selectedService === 'domicilio' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Motivo de la consulta <span className="text-red-500">*</span>
+                    Dirección (Calle, Número, Piso) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    placeholder="Av. Diagonal 123, 2-1"
+                  />
+                </div>
+              )}
+
+              {/* Conditional Reason Field */}
+              {(selectedService === 'consulta' || selectedService === 'domicilio') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Motivo de la visita <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     required
