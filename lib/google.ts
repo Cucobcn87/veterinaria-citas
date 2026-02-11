@@ -5,8 +5,10 @@ import { google } from 'googleapis';
 export const calendar = google.calendar({
     version: 'v3',
     auth: new google.auth.JWT({
-        email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'), // Fix newlines in env var
+        email: (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '').trim(),
+        key: (process.env.GOOGLE_PRIVATE_KEY || '')
+            .replace(/\\n/g, '\n')
+            .replace(/^"|"$/g, ''), // Remove surrounding quotes if present
         scopes: ['https://www.googleapis.com/auth/calendar'],
     }),
 });

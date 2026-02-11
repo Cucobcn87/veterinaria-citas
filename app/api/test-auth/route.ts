@@ -12,12 +12,11 @@ export async function GET() {
 
         const debugInfo = {
             emailLength: email ? email.length : 0,
+            emailPreview: email ? `${email.substring(0, 5)}...${email.substring(email.length - 5)}` : 'N/A',
             keyLength: key ? key.length : 0,
             calId: calId,
             keyHasBegin: key?.includes('BEGIN PRIVATE KEY'),
             keyHasEnd: key?.includes('END PRIVATE KEY'),
-            keyHasNewlines: key?.includes('\n'),
-            keyHasEscapedNewlines: key?.includes('\\n')
         };
 
         // 2. Attempt Connection
