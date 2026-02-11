@@ -19,18 +19,14 @@ export async function GET() {
             keyHasEnd: key?.includes('END PRIVATE KEY'),
         };
 
-        // 2. Attempt Connection
-        const response = await calendar.events.list({
-            calendarId: CALENDAR_ID,
-            maxResults: 1,
-            singleEvents: true,
-        });
+        // 2. Attempt Connection - List Calendars
+        const response = await calendar.calendarList.list();
+        const calendars = response.data.items?.map(c => ({ id: c.id, summary: c.summary })) || [];
 
         return NextResponse.json({
             status: 'success',
-            message: 'Connected to Google Calendar successfully!',
-            calendarId: CALENDAR_ID,
-            firstEvent: response.data.items?.[0] || 'No events found (but connection worked)',
+            message: 'Connected to Google! Accessible Calendars:',
+            accessibleCalendars: calendars,
             debug: debugInfo
         });
 
