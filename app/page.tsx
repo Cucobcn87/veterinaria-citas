@@ -374,7 +374,7 @@ export default function Home() {
               {selectedService === 'domicilio' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Dirección (Calle, Número, Piso) <span className="text-red-500">*</span>
+                    Dirección (Calle, Número, Piso) y Municipio <span className="text-red-500">*</span>
                   </label>
                   <input
                     required
