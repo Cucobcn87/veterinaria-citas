@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { calendar, CALENDAR_ID } from '@/lib/google';
-import { parse, addMinutes } from 'date-fns';
+import { parse, addMinutes, format } from 'date-fns';
 
 const SERVICE_DURATIONS = {
     consulta: 30,
@@ -36,10 +36,12 @@ export async function POST(request: NextRequest) {
             summary: summary,
             description: description,
             start: {
-                dateTime: startDateTime.toISOString(),
+                dateTime: format(startDateTime, "yyyy-MM-dd'T'HH:mm:ss"), // Send local time
+                timeZone: 'Europe/Madrid',
             },
             end: {
-                dateTime: endDateTime.toISOString(),
+                dateTime: format(endDateTime, "yyyy-MM-dd'T'HH:mm:ss"),
+                timeZone: 'Europe/Madrid',
             },
         };
 
