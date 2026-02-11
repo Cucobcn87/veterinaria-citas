@@ -139,20 +139,7 @@ export default function Home() {
           <p className="text-gray-600 mb-6">
             Hemos agendado tu cita para el <strong>{selectedDate && format(selectedDate, "d 'de' MMMM", { locale: es })}</strong> a las <strong>{selectedSlot}</strong>.
           </p>
-          <button
-            onClick={() => {
-              setSuccess(false);
-              setStep(1);
-              setSelectedService(null);
-              setVaccineType(null);
-              setSelectedSlot(null);
-              setSelectedDate(null);
-              setFormData({ ownerName: '', petName: '', mobile: '', reason: '' });
-            }}
-            className="w-full bg-black text-white py-3 rounded-lg font-medium hover:bg-gray-800 transition"
-          >
-            Reservar otra
-          </button>
+
         </div>
       </div>
     );
