@@ -13,4 +13,4 @@ export const calendar = google.calendar({
     }),
 });
 
-export const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID;
+export const CALENDAR_ID = (process.env.GOOGLE_CALENDAR_ID || '').trim();
