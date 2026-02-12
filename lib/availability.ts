@@ -1,5 +1,6 @@
 import { calendar, CALENDAR_ID } from '@/lib/google';
-import { addMinutes, format, isBefore, startOfDay, endOfDay, setHours, setMinutes, getDay, parse, addHours } from 'date-fns';
+import { addMinutes, format, isBefore, addHours } from 'date-fns';
+import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 
 const SERVICES = {
     consulta: { duration: 30 },
@@ -9,34 +10,49 @@ const SERVICES = {
     domicilio: { duration: 30 }
 };
 
+const TIME_ZONE = 'Europe/Madrid';
+
 export async function getSlotsForDate(date: Date, serviceType: string): Promise<string[]> {
     if (!SERVICES[serviceType as keyof typeof SERVICES]) return [];
 
-    const dayOfWeek = getDay(date);
+    // 1. Trust the date string part only (YYYY-MM-DD)
+    const dateStr = format(date, 'yyyy-MM-dd');
+
+    // 2. Determine Day of Week in Madrid
+    // Create a date object at 12:00 Madrid time to strictly check the day of week
+    const noonMadrid = fromZonedTime(`${dateStr} 12:00`, TIME_ZONE);
+    const dayOfWeek = parseInt(format(noonMadrid, 'i')); // 1 (Mon) - 7 (Sun)
+
     const serviceDuration = SERVICES[serviceType as keyof typeof SERVICES].duration;
 
-    // Buffer: Min time is now + 1 hour
-    const now = new Date();
-    const minTime = addHours(now, 1);
+    // Buffer: Min time is Now (in Madrid) + 1 hour
+    const nowUtc = new Date();
+    const nowMadrid = toZonedTime(nowUtc, TIME_ZONE);
+    const minTimeMadrid = addHours(nowMadrid, 1);
 
-    // Define working intervals
+    // Define working intervals (Local Madrid Hours)
     type Interval = { start: { h: number; m: number }; end: { h: number; m: number } };
     let ranges: Interval[] = [];
 
-    // SPECIAL RULE: Surgery only Mon-Fri at 10:00
+    // RULES (Same logic, but dayOfWeek is ISO 1-7 now? format 'i' returns 1-7)
+    // Javascript getDay() returns 0-6 (Sun-Sat). 
+    // Let's stick to standard getDay() logic if possible, or mapping.
+    // format 'i' returns '1' (Mon) to '7' (Sun).
+    // Logic below:
+    // Mon-Fri: 1-5. Sat: 6. Sun: 7.
+
     if (serviceType === 'cirugia') {
         if (dayOfWeek >= 1 && dayOfWeek <= 5) {
             ranges.push({ start: { h: 10, m: 0 }, end: { h: 12, m: 0 } });
         }
     }
-    // SPECIAL RULE: Home Visit only Mon-Fri at 14:15
     else if (serviceType === 'domicilio') {
         if (dayOfWeek >= 1 && dayOfWeek <= 5) {
             ranges.push({ start: { h: 14, m: 15 }, end: { h: 14, m: 45 } });
         }
     }
-    // General Consultations / Vaccines
     else {
+        // General
         if (dayOfWeek >= 1 && dayOfWeek <= 5) {
             ranges.push({ start: { h: 10, m: 0 }, end: { h: 14, m: 0 } });
             ranges.push({ start: { h: 16, m: 30 }, end: { h: 20, m: 30 } });
@@ -47,16 +63,19 @@ export async function getSlotsForDate(date: Date, serviceType: string): Promise<
 
     if (ranges.length === 0) return [];
 
-    const queryStart = setMinutes(setHours(startOfDay(date), ranges[0].start.h), ranges[0].start.m);
-    const lastRange = ranges[ranges.length - 1];
-    const queryEnd = setMinutes(setHours(startOfDay(date), lastRange.end.h), lastRange.end.m);
+    // Calculate Query Range in UTC to fetch from Google
+    // We fetch from Start of first range to End of last range (converted to UTC)
+    const firstRangeStartLocal = `${dateStr} ${ranges[0].start.h.toString().padStart(2, '0')}:${ranges[0].start.m.toString().padStart(2, '0')}`;
+    const lastRangeEndLocal = `${dateStr} ${ranges[ranges.length - 1].end.h.toString().padStart(2, '0')}:${ranges[ranges.length - 1].end.m.toString().padStart(2, '0')}`;
 
-    // Fetch events
+    const queryStartUtc = fromZonedTime(firstRangeStartLocal, TIME_ZONE);
+    const queryEndUtc = fromZonedTime(lastRangeEndLocal, TIME_ZONE);
+
     try {
         const response = await calendar.events.list({
             calendarId: CALENDAR_ID,
-            timeMin: queryStart.toISOString(),
-            timeMax: queryEnd.toISOString(),
+            timeMin: queryStartUtc.toISOString(),
+            timeMax: queryEndUtc.toISOString(),
             singleEvents: true,
             orderBy: 'startTime',
         });
@@ -65,39 +84,76 @@ export async function getSlotsForDate(date: Date, serviceType: string): Promise<
         const slots: string[] = [];
 
         for (const range of ranges) {
-            let currentSlot = setMinutes(setHours(startOfDay(date), range.start.h), range.start.m);
-            const rangeEnd = setMinutes(setHours(startOfDay(date), range.end.h), range.end.m);
+            // Construct current slot start in Local Madrid Time
+            // We use simple integer math or strings to iterate to avoid Date object shift confusion
+            // actually, iterating with Date objects in Madrid Time (Date-fns-tz) is safer?
+            // Let's use string construction -> fromZonedTime for checking.
 
-            while (isBefore(currentSlot, rangeEnd)) {
-                const slotEnd = addMinutes(currentSlot, serviceDuration);
+            let currentH = range.start.h;
+            let currentM = range.start.m;
 
-                // Checks:
-                // 1. Slot must be within range
-                if (isBefore(rangeEnd, slotEnd)) break;
+            // Loop until we reach end
+            // We can convert start/end to minutes for easier loop
+            let currentMinutes = currentH * 60 + currentM;
+            const endMinutes = range.end.h * 60 + range.end.m;
 
-                // 2. Slot must be in the future (with 1h buffer)
-                if (isBefore(currentSlot, minTime)) {
-                    // CAREFUL: If we just continue, we might be stuck if we don't increment
+            while (currentMinutes < endMinutes) {
+                // Construct Slot Time
+                const h = Math.floor(currentMinutes / 60);
+                const m = currentMinutes % 60;
+                const timeString = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                const slotIsoString = `${dateStr} ${timeString}`;
+
+                const slotStartUtc = fromZonedTime(slotIsoString, TIME_ZONE);
+                const slotEndUtc = addMinutes(slotStartUtc, serviceDuration);
+
+                // 1. Check Range Boundaries
+                // (Loop condition handles start < end, but we must ensure slotEnd <= rangeEnd)
+                // Actually easier to just check if slotStart + duration > rangeEnd
+                const rangeEndUtc = fromZonedTime(`${dateStr} ${ranges.find(r => r === range)?.end.h}:${ranges.find(r => r === range)?.end.m}`, TIME_ZONE);
+                if (isBefore(rangeEndUtc, slotEndUtc)) {
+                    // Break loop for this range
+                    break;
+                }
+
+                // 2. Check Future Buffer
+                // Compare slotStartUtc (as Madrid) vs minTimeMadrid? 
+                // No, compare timestamps. 
+                // slotStartUtc is a Date object (UTC timestamp)
+                // minTimeMadrid is a Date object (Madrid timestamp... wait).
+                // toZonedTime returns a Date object that represents the local time components... 
+                // actually toZonedTime returns a Date which if printed in system timezone looks like the target timezone.
+                // BUT comparisons should be done on timestamps (getTime()).
+                // Let's stick to UTC for comparisons.
+                // minTimeUtc = addHours(nowUtc, 1).
+                // if (isBefore(slotStartUtc, minTimeUtc)) ...
+                const minTimeUtc = addHours(nowUtc, 1);
+
+                if (isBefore(slotStartUtc, minTimeUtc)) {
+                    // Increment and continue
                     const step = (serviceType === 'unas' || serviceType === 'vacuna') ? 15 : 30;
-                    currentSlot = addMinutes(currentSlot, step);
+                    currentMinutes += step;
                     continue;
                 }
 
+                // 3. Check Overlaps
                 const isBusy = busyEvents.some(event => {
                     if (!event.start?.dateTime || !event.end?.dateTime) return false;
-                    const eventStart = new Date(event.start.dateTime);
+                    const eventStart = new Date(event.start.dateTime); // Automatically understands ISO with offset
                     const eventEnd = new Date(event.end.dateTime);
-                    return (currentSlot < eventEnd && slotEnd > eventStart);
+
+                    // Simple logic: Busy if (SlotStart < EventEnd) AND (SlotEnd > EventStart)
+                    return (slotStartUtc.getTime() < eventEnd.getTime()) && (slotEndUtc.getTime() > eventStart.getTime());
                 });
 
                 if (!isBusy) {
-                    slots.push(format(currentSlot, 'HH:mm'));
+                    slots.push(timeString);
                 }
 
                 if (serviceType === 'cirugia') break; // One slot max
 
                 const step = (serviceType === 'unas' || serviceType === 'vacuna') ? 15 : 30;
-                currentSlot = addMinutes(currentSlot, step);
+                currentMinutes += step;
             }
         }
         return slots;
