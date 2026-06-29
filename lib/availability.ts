@@ -55,7 +55,7 @@ export async function getSlotsForDate(date: Date, serviceType: string): Promise<
         // General
         if (dayOfWeek >= 1 && dayOfWeek <= 5) {
             ranges.push({ start: { h: 10, m: 0 }, end: { h: 14, m: 0 } });
-            ranges.push({ start: { h: 16, m: 30 }, end: { h: 20, m: 30 } });
+            ranges.push({ start: { h: 16, m: 0 }, end: { h: 20, m: 0 } });
         } else if (dayOfWeek === 6) {
             ranges.push({ start: { h: 10, m: 0 }, end: { h: 14, m: 0 } });
         }
