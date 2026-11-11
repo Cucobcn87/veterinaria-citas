@@ -3,12 +3,12 @@
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import {
-  format, addDays, startOfToday, startOfMonth, endOfMonth,
+  format, startOfToday, startOfMonth, endOfMonth,
   eachDayOfInterval, startOfWeek, endOfWeek, addMonths, subMonths,
   isSameMonth, isSameDay, isBefore
 } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Calendar as CalendarIcon, Clock, CheckCircle, Dog, Stethoscope, Scissors, ChevronLeft, ChevronRight, Syringe, Cat, Car } from 'lucide-react';
+import { Clock, CheckCircle, Dog, Stethoscope, Scissors, ChevronLeft, ChevronRight, Syringe, Cat, Car } from 'lucide-react';
 
 const SERVICES = [
   { id: 'consulta', name: 'Consulta General', duration: '30 min', icon: Stethoscope },
@@ -21,18 +21,14 @@ const SERVICES = [
 export default function Home() {
   const [step, setStep] = useState(1);
   const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [vaccineType, setVaccineType] = useState<string | null>(null);
 
-  // Sub-selection logic
-  const [vaccineType, setVaccineType] = useState<string | null>(null); // "Perro Anual", "Gato", etc.
-
-  // Calendar State
   const [currentMonth, setCurrentMonth] = useState<Date>(startOfToday());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   const [slots, setSlots] = useState<string[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
-  const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
   const [booking, setBooking] = useState(false);
@@ -42,22 +38,23 @@ export default function Home() {
     ownerName: '',
     petName: '',
     mobile: '',
-    reason: '', // New mandatory field for consulta
+    reason: '',
     address: ''
   });
 
-  // Calculate days to display (grid)
   const daysInMonth = eachDayOfInterval({
     start: startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 1 }),
     end: endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 1 })
   });
 
-  // Handle Service Selection
-  const handleServiceSelect = (serviceId: string) => {
-    setSelectedService(serviceId);
-    setVaccineType(null); // Reset
-    // If vaccine, stay on step 1 (conceptually) but show subtypes? Or move to "1.5"?
-    // Let's us a "substep" or simple conditional rendering in step 1.
+  const resetToServices = () => {
+    setStep(1);
+    setSelectedService(null);
+    setVaccineType(null);
+    setSelectedDate(null);
+    setSelectedSlot(null);
+    setSlots([]);
+    setAvailability({});
   };
 
   const confirmVaccine = (type: string) => {
@@ -65,10 +62,8 @@ export default function Home() {
     setStep(2);
   };
 
-  // Fetch Availability
   useEffect(() => {
     if (step === 2 && selectedService) {
-      setLoadingAvailability(true);
       const start = daysInMonth[0];
       const end = daysInMonth[daysInMonth.length - 1];
       const numberOfDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
@@ -79,11 +74,10 @@ export default function Home() {
         .then(data => {
           if (data.availability) setAvailability(prev => ({ ...prev, ...data.availability }));
         })
-        .finally(() => setLoadingAvailability(false));
+        .catch(() => {});
     }
   }, [step, selectedService, currentMonth.toISOString()]);
 
-  // Fetch Slots
   useEffect(() => {
     if (!selectedService || !selectedDate) return;
     const fetchSlots = async () => {
@@ -113,35 +107,46 @@ export default function Home() {
           date: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '',
           time: selectedSlot,
           service: selectedService,
-          vaccineType: vaccineType // Pass this if exists
+          vaccineType: vaccineType
         })
       });
 
       if (res.ok) {
         setSuccess(true);
       } else {
-        alert('Error al reservar.');
+        alert('Error al reservar. Por favor, inténtalo de nuevo o contáctanos por WhatsApp.');
       }
     } catch {
-      alert('Error de conexión');
+      alert('Error de conexión.');
     } finally {
       setBooking(false);
     }
   };
 
   if (success) {
-    // (Keep existing success UI, just reset new fields)
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
-        <div className="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md w-full">
+        <div className="bg-white p-8 rounded-2xl shadow-lg border-t-4 border-[#1B88C1] text-center max-w-md w-full">
           <div className="flex justify-center mb-4">
-            <CheckCircle className="w-16 h-16 text-green-500" />
+            <CheckCircle className="w-16 h-16 text-emerald-500" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">¡Cita Confirmada!</h1>
+          <h1 className="text-2xl font-bold text-[#1B88C1] mb-2">¡Cita Confirmada!</h1>
           <p className="text-gray-600 mb-6">
-            Hemos agendado tu cita para el <strong>{selectedDate && format(selectedDate, "d 'de' MMMM", { locale: es })}</strong> a las <strong>{selectedSlot}</strong>.
+            Hemos agendado tu cita para el{' '}
+            <strong>{selectedDate && format(selectedDate, "d 'de' MMMM", { locale: es })}</strong> a las{' '}
+            <strong>{selectedSlot}</strong>.
           </p>
-
+          <button
+            type="button"
+            onClick={() => {
+              setSuccess(false);
+              setFormData({ ownerName: '', petName: '', mobile: '', reason: '', address: '' });
+              resetToServices();
+            }}
+            className="w-full bg-[#1B88C1] hover:bg-[#F8C345] hover:text-gray-900 text-white py-3 px-6 rounded-xl font-semibold transition-colors cursor-pointer"
+          >
+            Reservar otra cita
+          </button>
         </div>
       </div>
     );
@@ -151,91 +156,113 @@ export default function Home() {
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
 
   return (
-    <main className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 font-sans">
-      <div className="max-w-4xl mx-auto">
-        {/* Header with Logo */}
+    <main className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 font-sans">
+      <div className="max-w-3xl mx-auto">
+        {/* Header with Bastet Branding */}
         <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg">
+          <div className="flex justify-center mb-3">
+            <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-[#F8C345] shadow-md bg-white">
               <Image
                 src="/logo.jpg"
-                alt="Centro Veterinario Bastet"
+                alt="Bastet Centro Veterinario"
                 fill
                 className="object-cover"
               />
             </div>
           </div>
-          <h1 className="text-4xl font-extrabold text-gray-900 mb-2 tracking-tight">Centro Veterinario Bastet</h1>
-          <p className="text-gray-500">
-            {step === 1 && 'Selecciona un servicio'}
-            {step === 2 && 'Selecciona Fecha y Hora'}
-            {step === 3 && 'Tus Datos'}
-          </p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#1B88C1] mb-2 tracking-tight">
+            Bastet Centro Veterinario
+          </h1>
+          <div className="inline-flex items-center gap-2 bg-[#fef7e0] border border-[#F8C345]/60 text-gray-800 text-sm font-medium px-4 py-1.5 rounded-full">
+            {step === 1 && 'Paso 1 de 3 · Selecciona un servicio'}
+            {step === 2 && 'Paso 2 de 3 · Selecciona fecha y hora'}
+            {step === 3 && 'Paso 3 de 3 · Completa tus datos'}
+          </div>
         </div>
 
         {/* STEP 1: SERVICE SELECTION */}
         {step === 1 && (
           <div className="space-y-6">
             {!selectedService ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="flex flex-wrap justify-center gap-4">
                 {SERVICES.map((service) => (
                   <button
                     key={service.id}
+                    type="button"
                     onClick={() => {
                       if (service.id === 'vacuna') {
                         setSelectedService('vacuna');
-                        // Don't set step 2 yet, show options
                       } else {
                         setSelectedService(service.id);
                         setStep(2);
                       }
                     }}
-                    className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-blue-300 transition-all text-center group flex flex-col items-center h-full"
+                    className="w-full sm:w-[calc(50%-0.5rem)] md:w-[calc(33.333%-0.7rem)] bg-white p-5 rounded-2xl shadow-sm border border-gray-200 hover:shadow-md hover:border-[#1B88C1] transition-all text-center group flex flex-col items-center cursor-pointer"
                   >
-                    <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mb-4 group-hover:bg-blue-100 transition-colors">
-                      <service.icon className="w-8 h-8 text-blue-600" />
+                    <div className="bg-[#e8f4fa] w-14 h-14 rounded-full flex items-center justify-center mb-3 group-hover:bg-[#F8C345] transition-colors">
+                      <service.icon className="w-7 h-7 text-[#1B88C1] group-hover:text-gray-900 transition-colors" />
                     </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{service.name}</h3>
+                    <h3 className="text-base font-bold text-gray-900 mb-1">{service.name}</h3>
                     <p className="text-gray-500 text-xs flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {service.duration}
+                      <Clock className="w-3.5 h-3.5 text-[#1B88C1]" /> {service.duration}
                     </p>
                   </button>
                 ))}
               </div>
             ) : selectedService === 'vacuna' ? (
-              <div className="max-w-md mx-auto bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
+              <div className="max-w-md mx-auto bg-white p-7 rounded-2xl shadow-sm border border-gray-200">
                 <button
-                  onClick={() => setSelectedService(null)}
-                  className="text-sm text-gray-400 hover:text-gray-700 mb-4 flex items-center gap-1"
+                  type="button"
+                  onClick={() => {
+                    setSelectedService(null);
+                    setVaccineType(null);
+                  }}
+                  className="inline-flex items-center gap-1 text-sm font-medium text-[#1B88C1] hover:underline mb-4 cursor-pointer"
                 >
-                  <ChevronLeft className="w-4 h-4" /> Volver
+                  <ChevronLeft className="w-4 h-4" /> Volver a servicios
                 </button>
 
-                <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">¿Qué mascota es?</h2>
+                <h2 className="text-xl font-bold text-[#1B88C1] mb-5 text-center">¿Qué mascota es?</h2>
 
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <button className="p-4 border border-gray-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition group focus:ring-2 focus:ring-blue-500"
-                    onClick={() => { /* Show dog options */ setVaccineType('pending-dog'); }}
+                <div className="grid grid-cols-2 gap-4 mb-5">
+                  <button
+                    type="button"
+                    className={`p-4 border rounded-xl transition group cursor-pointer ${
+                      vaccineType === 'pending-dog'
+                        ? 'bg-[#e8f4fa] border-[#1B88C1] ring-2 ring-[#1B88C1]/30'
+                        : 'border-gray-200 hover:bg-[#e8f4fa]/60 hover:border-[#1B88C1]'
+                    }`}
+                    onClick={() => setVaccineType('pending-dog')}
                   >
-                    <Dog className="w-8 h-8 mx-auto mb-2 text-gray-600 group-hover:text-blue-600" />
-                    <div className="font-bold">Perro</div>
+                    <Dog className="w-8 h-8 mx-auto mb-2 text-[#1B88C1]" />
+                    <div className="font-bold text-gray-900">Perro</div>
                   </button>
-                  <button className="p-4 border border-gray-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition group focus:ring-2 focus:ring-blue-500"
+                  <button
+                    type="button"
+                    className="p-4 border border-gray-200 rounded-xl hover:bg-[#e8f4fa]/60 hover:border-[#1B88C1] transition group cursor-pointer"
                     onClick={() => confirmVaccine('Gato')}
                   >
-                    <Cat className="w-8 h-8 mx-auto mb-2 text-gray-600 group-hover:text-blue-600" />
-                    <div className="font-bold">Gato</div>
+                    <Cat className="w-8 h-8 mx-auto mb-2 text-[#1B88C1]" />
+                    <div className="font-bold text-gray-900">Gato</div>
                   </button>
                 </div>
 
                 {vaccineType === 'pending-dog' && (
-                  <div className="animate-fade-in-up">
-                    <h3 className="text-md font-bold text-gray-800 mb-3 text-center">¿Qué vacuna necesita?</h3>
-                    <div className="space-y-3">
-                      <button onClick={() => confirmVaccine('Perro - Anual')} className="w-full p-3 bg-gray-50 hover:bg-blue-600 hover:text-white rounded-lg font-medium transition text-left px-5">
+                  <div className="pt-2 border-t border-gray-100">
+                    <h3 className="text-sm font-bold text-gray-800 mb-3 text-center">¿Qué vacuna necesita?</h3>
+                    <div className="space-y-2.5">
+                      <button
+                        type="button"
+                        onClick={() => confirmVaccine('Perro - Anual')}
+                        className="w-full p-3 bg-gray-50 hover:bg-[#1B88C1] hover:text-white rounded-xl font-medium transition text-left px-5 cursor-pointer"
+                      >
                         • Vacuna Anual
                       </button>
-                      <button onClick={() => confirmVaccine('Perro - Leishmania')} className="w-full p-3 bg-gray-50 hover:bg-blue-600 hover:text-white rounded-lg font-medium transition text-left px-5">
+                      <button
+                        type="button"
+                        onClick={() => confirmVaccine('Perro - Leishmania')}
+                        className="w-full p-3 bg-gray-50 hover:bg-[#1B88C1] hover:text-white rounded-xl font-medium transition text-left px-5 cursor-pointer"
+                      >
                         • Vacuna Leishmania
                       </button>
                     </div>
@@ -246,36 +273,56 @@ export default function Home() {
           </div>
         )}
 
-        {/* STEP 2: CALENDAR (Reuse mostly, just update back button logic) */}
+        {/* STEP 2: CALENDAR */}
         {step === 2 && (
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-            {/* ... Calendar column ... */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             <div className="lg:col-span-3 space-y-4">
-              <button onClick={() => { setStep(1); setSelectedDate(null); }} className="text-gray-500 hover:text-black text-sm mb-2 flex items-center gap-1">
-                <ChevronLeft className="w-4 h-4" /> Cambiar servicio
-              </button>
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                {/* Nav */}
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold capitalize text-gray-900">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={resetToServices}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-[#1B88C1] bg-[#e8f4fa] hover:bg-[#1B88C1] hover:text-white px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" /> Cambiar servicio
+                </button>
+                <span className="text-sm font-semibold text-gray-700 bg-white px-3 py-1 rounded-lg border border-gray-200">
+                  {SERVICES.find(s => s.id === selectedService)?.name}
+                  {vaccineType && !vaccineType.includes('pending') ? ` (${vaccineType})` : ''}
+                </span>
+              </div>
+
+              <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="text-lg sm:text-xl font-bold capitalize text-[#1B88C1]">
                     {format(currentMonth, 'MMMM yyyy', { locale: es })}
                   </h2>
-                  <div className="flex gap-2">
-                    <button onClick={prevMonth} disabled={isSameMonth(currentMonth, startOfToday())} className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-30">
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={prevMonth}
+                      disabled={isSameMonth(currentMonth, startOfToday())}
+                      className="p-2 hover:bg-[#e8f4fa] text-[#1B88C1] rounded-full disabled:opacity-30 cursor-pointer"
+                      aria-label="Mes anterior"
+                    >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
-                    <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded-full">
+                    <button
+                      type="button"
+                      onClick={nextMonth}
+                      className="p-2 hover:bg-[#e8f4fa] text-[#1B88C1] rounded-full cursor-pointer"
+                      aria-label="Mes siguiente"
+                    >
                       <ChevronRight className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
-                {/* Grid */}
+
                 <div className="grid grid-cols-7 gap-1 text-center mb-2">
                   {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(d => (
-                    <div key={d} className="text-xs font-bold text-gray-400 py-2">{d}</div>
+                    <div key={d} className="text-xs font-bold text-gray-400 py-1.5">{d}</div>
                   ))}
                 </div>
-                <div className="grid grid-cols-7 gap-1">
+                <div className="grid grid-cols-7 gap-1.5">
                   {daysInMonth.map((day) => {
                     const dateStr = format(day, 'yyyy-MM-dd');
                     const isCurrentMonth = isSameMonth(day, currentMonth);
@@ -286,61 +333,64 @@ export default function Home() {
                     return (
                       <button
                         key={day.toString()}
+                        type="button"
                         onClick={() => { setSelectedDate(day); setSelectedSlot(null); }}
                         disabled={isPast || isUnavailable}
                         className={`
-                                            aspect-square rounded-lg flex flex-col items-center justify-center text-sm relative transition-all
-                                            ${!isCurrentMonth ? 'text-gray-300 bg-gray-50/50' : 'text-gray-700 bg-white hover:bg-gray-50'}
-                                            ${isSelected ? '!bg-black !text-white shadow-lg z-10 scale-110' : ''}
-                                            ${isToday && !isSelected ? 'ring-1 ring-blue-500 font-bold' : ''}
-                                            ${isUnavailable && isCurrentMonth ? 'bg-red-50 text-red-300 cursor-not-allowed' : ''}
-                                            ${isPast ? 'opacity-30 cursor-not-allowed' : ''}
-                                        `}
+                          aspect-square rounded-lg flex flex-col items-center justify-center text-sm relative transition-all cursor-pointer
+                          ${!isCurrentMonth ? 'text-gray-300 bg-gray-50/50' : 'text-gray-700 bg-white hover:bg-[#e8f4fa]'}
+                          ${isSelected ? '!bg-[#1B88C1] !text-white font-bold shadow-md z-10 scale-105' : ''}
+                          ${isToday && !isSelected ? 'ring-2 ring-[#F8C345] font-bold' : ''}
+                          ${isUnavailable && isCurrentMonth ? 'bg-red-50 text-red-300 cursor-not-allowed hover:bg-red-50' : ''}
+                          ${isPast ? 'opacity-30 cursor-not-allowed' : ''}
+                        `}
                       >
                         <span>{format(day, 'd')}</span>
                       </button>
-                    )
+                    );
                   })}
                 </div>
               </div>
             </div>
-            {/* ... Slots column (Reuse existing) ... */}
+
             <div className="lg:col-span-2">
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-full">
-                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <Clock className="w-5 h-5" />
+              <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-200 h-full">
+                <h3 className="font-bold text-[#1B88C1] mb-4 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-[#F8C345]" />
                   {selectedDate
                     ? `Horarios para el ${format(selectedDate, 'd/MM', { locale: es })}`
                     : 'Selecciona un día'
                   }
                 </h3>
-                {/* ... slots logic ... */}
+
                 {!selectedDate ? (
-                  <div className="text-center py-12 text-gray-400 text-sm">
-                    👈 Elige una fecha disponible en el calendario
+                  <div className="text-center py-10 text-gray-400 text-sm">
+                    Elige una fecha disponible en el calendario para ver las horas libres.
                   </div>
                 ) : loadingSlots ? (
-                  <div className="text-center py-12 text-blue-500 animate-pulse">Buscando...</div>
+                  <div className="text-center py-10 text-[#1B88C1] font-medium animate-pulse">Buscando horarios...</div>
                 ) : slots.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-2.5">
                     {slots.map(slot => (
                       <button
                         key={slot}
+                        type="button"
                         onClick={() => { setSelectedSlot(slot); setStep(3); }}
-                        className={`py-3 rounded-lg text-sm font-medium border transition-all ${selectedSlot === slot
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                          : 'border-gray-200 text-gray-700 hover:border-blue-300 hover:bg-blue-50'
-                          }`}
+                        className={`py-2.5 rounded-xl text-sm font-semibold border transition-all cursor-pointer ${
+                          selectedSlot === slot
+                            ? 'bg-[#1B88C1] text-white border-[#1B88C1] shadow-sm'
+                            : 'border-gray-200 text-gray-700 hover:border-[#1B88C1] hover:bg-[#e8f4fa] hover:text-[#1B88C1]'
+                        }`}
                       >
                         {slot}
                       </button>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-12 text-gray-400">
+                  <div className="text-center py-10 text-gray-400 text-sm">
                     {availability[format(selectedDate, 'yyyy-MM-dd')] === false
-                      ? <span className="text-red-500">Completo / No disponible</span>
-                      : 'No hay citas libres.'
+                      ? <span className="text-red-500 font-medium">Completo / No disponible</span>
+                      : 'No hay citas libres este día.'
                     }
                   </div>
                 )}
@@ -351,26 +401,31 @@ export default function Home() {
 
         {/* STEP 3: FORM */}
         {step === 3 && (
-          <div className="max-w-md mx-auto bg-white p-8 rounded-2xl shadow-lg border border-gray-100">
-            <button onClick={() => setStep(2)} className="text-gray-500 hover:text-black mb-6 text-sm flex items-center gap-1">
+          <div className="max-w-md mx-auto bg-white p-6 sm:p-8 rounded-2xl shadow-md border border-gray-200">
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              className="inline-flex items-center gap-1 text-sm font-medium text-[#1B88C1] hover:underline mb-5 cursor-pointer"
+            >
               <ChevronLeft className="w-4 h-4" /> Volver a horarios
             </button>
 
-            <h2 className="text-xl font-bold mb-6">Completa tus datos</h2>
+            <h2 className="text-xl font-bold text-[#1B88C1] mb-5">Completa tus datos</h2>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="bg-blue-50 p-4 rounded-lg mb-6 border border-blue-100">
-                <div className="text-sm text-blue-800 font-medium">Resumen:</div>
-                <div className="font-bold text-blue-900">
+              <div className="bg-[#f0f8fc] p-4 rounded-xl mb-5 border border-[#1B88C1]/25">
+                <div className="text-xs uppercase tracking-wide text-[#1B88C1] font-semibold mb-1">Resumen de tu cita</div>
+                <div className="font-bold text-gray-900">
                   {SERVICES.find(s => s.id === selectedService)?.name}
-                  {vaccineType && !vaccineType.includes('pending') && <span className="font-normal text-blue-700"> ({vaccineType})</span>}
+                  {vaccineType && !vaccineType.includes('pending') && (
+                    <span className="font-normal text-gray-700"> ({vaccineType})</span>
+                  )}
                 </div>
-                <div className="text-blue-700 text-sm capitalize">
-                  {selectedDate && format(selectedDate, "EOOOO d 'de' MMMM", { locale: es })} @ {selectedSlot}
+                <div className="text-[#1B88C1] font-medium text-sm capitalize mt-0.5">
+                  {selectedDate && format(selectedDate, "EEEE d 'de' MMMM", { locale: es })} · {selectedSlot}
                 </div>
               </div>
 
-              {/* Conditional Address Field */}
               {selectedService === 'domicilio' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -379,15 +434,14 @@ export default function Home() {
                   <input
                     required
                     type="text"
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#1B88C1] focus:border-[#1B88C1] outline-none transition"
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    placeholder="Av. Diagonal 123, 2-1"
+                    placeholder="Av. Lluís Companys 27, Parets"
                   />
                 </div>
               )}
 
-              {/* Conditional Reason Field */}
               {(selectedService === 'consulta' || selectedService === 'domicilio') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -396,10 +450,10 @@ export default function Home() {
                   <textarea
                     required
                     rows={3}
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#1B88C1] focus:border-[#1B88C1] outline-none transition"
                     value={formData.reason}
                     onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-                    placeholder="Describa brevemente qué le pasa a su mascota..."
+                    placeholder="Describe brevemente qué le pasa a tu mascota..."
                   />
                 </div>
               )}
@@ -409,10 +463,10 @@ export default function Home() {
                 <input
                   required
                   type="text"
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition"
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#1B88C1] focus:border-[#1B88C1] outline-none transition"
                   value={formData.ownerName}
                   onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
-                  placeholder="Ej: Juan Pérez"
+                  placeholder="Ej: María García"
                 />
               </div>
 
@@ -421,10 +475,10 @@ export default function Home() {
                 <input
                   required
                   type="text"
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition"
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#1B88C1] focus:border-[#1B88C1] outline-none transition"
                   value={formData.petName}
                   onChange={(e) => setFormData({ ...formData, petName: e.target.value })}
-                  placeholder="Ej: Firulais"
+                  placeholder="Ej: Luna"
                 />
               </div>
 
@@ -433,7 +487,7 @@ export default function Home() {
                 <input
                   required
                   type="tel"
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition"
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#1B88C1] focus:border-[#1B88C1] outline-none transition"
                   value={formData.mobile}
                   onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
                   placeholder="Ej: 600123456"
@@ -443,7 +497,7 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={booking}
-                className="w-full bg-black text-white py-4 rounded-xl font-bold text-lg hover:bg-gray-800 transform active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-4 shadow-xl"
+                className="w-full bg-[#1B88C1] hover:bg-[#F8C345] hover:text-gray-900 text-white py-3.5 rounded-xl font-bold text-base uppercase tracking-wide transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2 shadow-md cursor-pointer"
               >
                 {booking ? 'Confirmando...' : 'Confirmar Reserva'}
               </button>
